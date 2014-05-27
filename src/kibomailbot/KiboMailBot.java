@@ -6,6 +6,8 @@
 
 package kibomailbot;
 
+import bo.com.kibo.mailbot.JFramePrincipal;
+
 /**
  *
  * @author Olvinho
@@ -17,6 +19,7 @@ public class KiboMailBot {
      */
     public static void main(String[] args) {
         // TODO code application logic here
+        (new JFramePrincipal()).setVisible(true);
     }
     
 }
