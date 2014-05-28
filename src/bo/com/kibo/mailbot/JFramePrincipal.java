@@ -3,21 +3,28 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-
 package bo.com.kibo.mailbot;
+
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 
 /**
  *
  * @author Olvinho
  */
-public class JFramePrincipal extends javax.swing.JFrame  implements IJavaMailListener{
+public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailListener {
 
     /**
      * Creates new form JFramePrincipal
      */
     private JavaMail bandeja;
+
     public JFramePrincipal() {
         initComponents();
+        iniciar();
+    }
+
+    private void iniciar() {
         bandeja = new JavaMail();
         bandeja.setListener(this);
     }
@@ -40,14 +47,25 @@ public class JFramePrincipal extends javax.swing.JFrame  implements IJavaMailLis
         jButtonLimpiar = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setTitle("Administrador de correos KIBO");
 
         jButtonIniciar.setText("Iniciar");
+        jButtonIniciar.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButtonIniciarActionPerformed(evt);
+            }
+        });
 
         jLabel1.setFont(new java.awt.Font("Traditional Arabic", 1, 18)); // NOI18N
         jLabel1.setText("Lector de Bandeja de entrada KIBO");
 
         jButtonParar.setText("Parar");
         jButtonParar.setEnabled(false);
+        jButtonParar.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButtonPararActionPerformed(evt);
+            }
+        });
 
         jButtonConfigurar.setText("Configurar");
 
@@ -114,6 +132,22 @@ public class JFramePrincipal extends javax.swing.JFrame  implements IJavaMailLis
         jTextAreaLog.setText("");
     }//GEN-LAST:event_jButtonLimpiarActionPerformed
 
+    private void jButtonIniciarActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonIniciarActionPerformed
+        // TODO add your handling code here:
+        try {
+            bandeja.iniciar();
+        } catch (Exception e) {
+            showError(e.getMessage());
+        }
+        
+    }//GEN-LAST:event_jButtonIniciarActionPerformed
+
+    private void jButtonPararActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonPararActionPerformed
+        // TODO add your handling code here:
+        bandeja.parar();
+    }//GEN-LAST:event_jButtonPararActionPerformed
+
+    
     /**
      * @param args the command line arguments
      */
@@ -161,16 +195,44 @@ public class JFramePrincipal extends javax.swing.JFrame  implements IJavaMailLis
 
     @Override
     public void alIniciar() {
-        jTextAreaLog.append("Lector de bandeja iniciado");
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                jTextAreaLog.append("Lector de bandeja iniciado. \n");
+                jButtonIniciar.setEnabled(false);
+                jButtonConfigurar.setEnabled(false);
+                jButtonParar.setEnabled(true);
+                
+            }
+        });
     }
 
     @Override
     public void alParar() {
-       jTextAreaLog.append("Lector de bandeja parado");
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                jTextAreaLog.append("Lector de bandeja parado. \n");
+                jButtonIniciar.setEnabled(true);
+                jButtonConfigurar.setEnabled(true);
+                jButtonParar.setEnabled(false);
+            }
+        });
+
     }
 
     @Override
-    public void alRecibirEvento(String texto) {
-        jTextAreaLog.append(texto);
+    public void alRecibirEvento(final String texto) {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                jTextAreaLog.append(texto + "\n");
+            }
+        });
+
+    }
+    
+    private void showError(String mensaje){
+        JOptionPane.showMessageDialog(this, mensaje, "Error", JOptionPane.ERROR_MESSAGE);
     }
 }

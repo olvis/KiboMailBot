@@ -3,11 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-
 package kibomailbot;
 
 import bo.com.kibo.mailbot.JFramePrincipal;
-
 /**
  *
  * @author Olvinho
@@ -21,5 +19,4 @@ public class KiboMailBot {
         // TODO code application logic here
         (new JFramePrincipal()).setVisible(true);
     }
-    
 }
