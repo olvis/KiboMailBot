@@ -10,8 +10,9 @@ package bo.com.kibo.mailbot;
  *
  * @author Olvinho
  */
-public interface IJavaMailListener {
+public interface ILectorBandejaEscuchador {
     void alIniciar();
     void alParar();
-    void alRecibirEvento(String texto);
+    void alRecibirEvento(String mensaje);
+    void alOcurrirError(String mensaje);
 }

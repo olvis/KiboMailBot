@@ -5,6 +5,9 @@
  */
 package bo.com.kibo.mailbot;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
@@ -12,12 +15,12 @@ import javax.swing.SwingUtilities;
  *
  * @author Olvinho
  */
-public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailListener {
+public class JFramePrincipal extends javax.swing.JFrame implements ILectorBandejaEscuchador {
 
     /**
      * Creates new form JFramePrincipal
      */
-    private JavaMail bandeja;
+    private LectorBandejaCorreo bandeja;
 
     public JFramePrincipal() {
         initComponents();
@@ -25,7 +28,7 @@ public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailList
     }
 
     private void iniciar() {
-        bandeja = new JavaMail();
+        bandeja = new LectorBandejaCorreo();
         bandeja.setListener(this);
     }
 
@@ -134,12 +137,13 @@ public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailList
 
     private void jButtonIniciarActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonIniciarActionPerformed
         // TODO add your handling code here:
+        jButtonIniciar.setEnabled(false);
         try {
             bandeja.iniciar();
         } catch (Exception e) {
             showError(e.getMessage());
         }
-        
+        jButtonIniciar.setEnabled(true);
     }//GEN-LAST:event_jButtonIniciarActionPerformed
 
     private void jButtonPararActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButtonPararActionPerformed
@@ -198,7 +202,7 @@ public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailList
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                jTextAreaLog.append("Lector de bandeja iniciado. \n");
+                adicionarLineaLog("Lector de bandeja iniciado.");
                 jButtonIniciar.setEnabled(false);
                 jButtonConfigurar.setEnabled(false);
                 jButtonParar.setEnabled(true);
@@ -206,13 +210,19 @@ public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailList
             }
         });
     }
+    
+    private void adicionarLineaLog(String text){
+        DateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
+        Date date = new Date();
+        jTextAreaLog.append(" [" + dateFormat.format(date) + "] " + text+ "\n");
+    }
 
     @Override
     public void alParar() {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                jTextAreaLog.append("Lector de bandeja parado. \n");
+                adicionarLineaLog("Lector de bandeja parado.");
                 jButtonIniciar.setEnabled(true);
                 jButtonConfigurar.setEnabled(true);
                 jButtonParar.setEnabled(false);
@@ -226,7 +236,7 @@ public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailList
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                jTextAreaLog.append(texto + "\n");
+                adicionarLineaLog(texto);
             }
         });
 
@@ -234,5 +244,10 @@ public class JFramePrincipal extends javax.swing.JFrame implements IJavaMailList
     
     private void showError(String mensaje){
         JOptionPane.showMessageDialog(this, mensaje, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    @Override
+    public void alOcurrirError(String mensaje) {
+        showError(mensaje);
     }
 }
