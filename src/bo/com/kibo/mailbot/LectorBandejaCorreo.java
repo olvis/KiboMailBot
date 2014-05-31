@@ -5,7 +5,15 @@
  */
 package bo.com.kibo.mailbot;
 
+import bo.com.kibo.bl.impl.control.FactoriaObjetosNegocio;
+import bo.com.kibo.bl.intf.IUsuarioBO;
+import bo.com.kibo.mailbot.impl.InterpretadorMensajeGenerico;
+import bo.com.kibo.mailbot.impl.UtilitariosMensajes;
+import bo.com.kibo.mailbot.intf.IInterpretadorMensaje;
+import bo.com.kibo.mailbot.intf.ILectorBandejaEscuchador;
+import com.sun.mail.iap.ProtocolException;
 import com.sun.mail.imap.IMAPFolder;
+import com.sun.mail.imap.protocol.IMAPProtocol;
 import com.sun.mail.util.MailConnectException;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -14,21 +22,31 @@ import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.mail.Address;
 import javax.mail.AuthenticationFailedException;
+import javax.mail.BodyPart;
 import javax.mail.Flags;
 import javax.mail.Folder;
+import javax.mail.FolderClosedException;
+import javax.mail.IllegalWriteException;
 import javax.mail.Message;
 import javax.mail.MessagingException;
+import javax.mail.Multipart;
 import javax.mail.NoSuchProviderException;
 import javax.mail.PasswordAuthentication;
 import javax.mail.Session;
 import javax.mail.Store;
+import javax.mail.Transport;
 import javax.mail.event.MessageCountAdapter;
 import javax.mail.event.MessageCountEvent;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 import javax.mail.search.FlagTerm;
 
 /**
@@ -36,6 +54,8 @@ import javax.mail.search.FlagTerm;
  * @author Olvinho
  */
 public class LectorBandejaCorreo implements Runnable {
+
+    private static final Logger LOG = Logger.getLogger(LectorBandejaCorreo.class.getName());
 
     private boolean running;
     private ILectorBandejaEscuchador listener;
@@ -49,19 +69,32 @@ public class LectorBandejaCorreo implements Runnable {
     private boolean conexionSegura;
     private String dominio;
     private String email;
+    private final int segundos = 10;
 
     private Properties propiedadesMail;
-    Store store;
-    Session sesion;
-    IMAPFolder bandejaEntrada;
+    private Store store;
+    private Session sesion;
+    private IMAPFolder bandejaEntrada;
+    private Message[] nuevosMensajes;
+    private MimeMessage respuesta;
+    private final IMAPFolder.ProtocolCommand comandoNOP;
 
-    private static final int NUMERO_HILOS = 10;
-    private ExecutorService poolDeTareas;
     private Thread hiloPrincipal;
     private Thread hiloIntentoConexion;
+    private Thread hiloManterConexionActiva;
 
     public LectorBandejaCorreo() {
         this.running = false;
+        this.comandoNOP = new IMAPFolder.ProtocolCommand() {
+            @Override
+            public Object doCommand(IMAPProtocol imapp) throws ProtocolException {
+                if (imapp != null) {
+                    imapp.simpleCommand("NOOP", null);
+                }
+                return null;
+            }
+        };
+        nuevosMensajes = null;
     }
 
     public ILectorBandejaEscuchador getListener() {
@@ -85,29 +118,59 @@ public class LectorBandejaCorreo implements Runnable {
         if (listener != null) {
             listener.alIniciar();
         }
-        poolDeTareas = Executors.newFixedThreadPool(NUMERO_HILOS);
-
+        crearHiloMantenerConexion();
         while (isRunning()) {
-            notificarEvento("Buscando nuevos mensajes");
             FlagTerm ft = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
             try {
-                Message[] mensajes = bandejaEntrada.search(ft);
+                if (!bandejaEntrada.isOpen()) {
+                    bandejaEntrada.open(Folder.READ_WRITE);
+                    if (!hiloManterConexionActiva.isAlive()) {
+                        crearHiloMantenerConexion();
+                    }
+                }
+                notificarEvento("Buscando nuevos mensajes");
+                Message[] mensajes;
+                if (nuevosMensajes != null) {
+                    mensajes = bandejaEntrada.search(ft, nuevosMensajes);
+                    nuevosMensajes = null;
+                } else {
+                    mensajes = bandejaEntrada.search(ft);
+                }
                 notificarEvento("Se han encontrado " + mensajes.length + " mensaje(s) nuevos");
-                for (Message mensaje : mensajes) {
+                int i;
+                for (i = 0; i < mensajes.length; i++) {
+                    Message mensaje = mensajes[i];
                     mensaje.setFlag(Flags.Flag.SEEN, true);
-                    ProcesadorMensaje p = new ProcesadorMensaje(email, mensaje);
-                    poolDeTareas.execute(p);
+                    notificarEvento("Procesando mensaje " + (i + 1) + " de " + mensajes.length);
+                    procesarMensaje(mensaje);
+                    notificarEvento("Mensaje " + (i + 1) + " de " + mensajes.length + " procesado");
                 }
                 if (isRunning()) {
                     notificarEvento("Esperando nuevos mensajes");
                     bandejaEntrada.idle(true);
                     notificarEvento("Fin de la espera de nuevos mensajes");
                 }
+            } catch (IllegalWriteException ex) {
+                notificarError("La bandeja no permite marcar los mensajes como no leídos, esto provocará una lectura infinita. El lector se detendrá");
+                break;
+            } catch (FolderClosedException ex) {
+                notificarEvento("La bandeja fue cerrada inesperadamente, se esperará " + segundos + " segundo(s) y se volverá a intentarlo");
+                try {
+                    Thread.sleep(segundos * 1000);
+                } catch (InterruptedException ex1) {
+                    notificarError(ex.getMessage());
+                    break;
+                }
             } catch (MessagingException ex) {
-                Logger.getLogger(LectorBandejaCorreo.class.getName()).log(Level.SEVERE, null, ex);
+                LOG.log(Level.SEVERE, "Excepcion en el hilo principal", ex);
             }
         }
-        
+        notificarEvento("El lector se está deteniendo");
+
+        if (hiloManterConexionActiva != null && hiloManterConexionActiva.isAlive()) {
+            hiloManterConexionActiva.interrupt();
+        }
+
         try {
             if (bandejaEntrada.isOpen()) {
                 bandejaEntrada.close(false);
@@ -116,14 +179,111 @@ public class LectorBandejaCorreo implements Runnable {
                 store.close();
             }
         } catch (MessagingException ex) {
-            Logger.getLogger(LectorBandejaCorreo.class.getName()).log(Level.SEVERE, null, ex);
+            LOG.log(Level.SEVERE, null, ex);
         }
 
         if (listener != null) {
             listener.alParar();
         }
     }
-    
+
+    private static final Pattern patronMail = Pattern.compile("[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+");
+
+    private void procesarMensaje(Message mensaje) {
+        int numeroMensaje = mensaje.getMessageNumber();
+        //DateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
+        try {
+            String emailRemitente = "";
+            String asunto = mensaje.getSubject();
+            String remitente = mensaje.getFrom()[0].toString();
+            Matcher matcher = patronMail.matcher(remitente);
+            if (matcher.find()) {
+                emailRemitente = matcher.group();
+            }
+            if (!"".equals(emailRemitente)) {
+                //Verificamos si esta registrado
+                Address[] arrayFrom = {new InternetAddress(email)};
+                respuesta = (MimeMessage) mensaje.reply(false);
+                respuesta.setFrom(arrayFrom[0]);
+                respuesta.setReplyTo(arrayFrom);
+                respuesta.addRecipient(Message.RecipientType.TO, new InternetAddress(emailRemitente));
+                IUsuarioBO usuarioBO = FactoriaObjetosNegocio.getInstance().getIUsuarioBO();
+                //System.out.printf("[%s] Antes de consultar el IdUsuario por Correo\n", dateFormat.format(new Date()));
+                Integer idUsuario = usuarioBO.getIdUsuarioPorEmail(emailRemitente);
+                //System.out.printf("[%s] Fin de la consulta\n" , dateFormat.format(new Date()));
+                if (idUsuario != null) {
+                    boolean leerAdjunto = false;
+                    asunto = corregirAsunto(asunto);
+                    if (!"".equals(asunto)) {
+                        int i = asunto.indexOf(UtilitariosMensajes.SEPERADOR_PARAMETROS);
+                        if (i != -1) {
+                            String nombreEntidad = asunto.substring(0, i);
+                            IInterpretadorMensaje interprete = InterpretadorMensajeGenerico.getMapaObjetos().get(nombreEntidad);
+                            if (interprete != null) {
+                                asunto = asunto.substring(i, asunto.length());
+                                interprete.setParametros(asunto);
+                                interprete.setNombreEntidad(nombreEntidad);
+                                Multipart cuerpo = interprete.interpretar();
+                                if (cuerpo != null){
+                                    respuesta.setContent(cuerpo);
+                                }else{
+                                    leerAdjunto = true;
+                                }
+                            } else {
+                                //No se encontro un interpete para el asunto
+                                leerAdjunto = true;
+                            }
+                        }
+                        else{
+                            leerAdjunto =  true;
+                        }
+                    } else {
+                        //No existe asunto
+                        leerAdjunto = true;
+                    }
+
+                    if (leerAdjunto) {
+                        //No se pudo procesar por asunto, leer el adjunto si tiene
+
+                    }
+                } else {
+                    respuesta.setContent(getMensajeUsuarioNoRegistrado());
+                }
+                //System.out.printf("[%s] Antes de enviar respuesta \n", dateFormat.format(new Date()));
+                Transport.send(respuesta);
+                //System.out.printf("[%s] La respuesta fue enviada \n", dateFormat.format(new Date()));
+            } else {
+                notificarEvento("Imposible determinar el remitente, el mensaje será ignorado");
+            }
+        } catch (MessagingException ex) {
+            LOG.log(Level.SEVERE, "Error procesando mensaje #" + numeroMensaje, ex);
+        }
+    }
+
+    private String corregirAsunto(String asunto) {
+        if (asunto == null) {
+            return "";
+        }
+
+        asunto = asunto.replace(" ", "").toLowerCase(); //Quitamos espacios en blanco y llevamos a minusculas
+        if (asunto.length() > 3) {
+            if (asunto.substring(0, 2).equals("re:")) {
+                asunto = asunto.substring(3, asunto.length() - 1);
+            }
+        } else if (asunto.length() == 3 && asunto.equals("re:")) {
+            asunto = "";
+        }
+        return asunto;
+    }
+
+    private Multipart getMensajeUsuarioNoRegistrado() throws MessagingException {
+        Multipart multiPartes = new MimeMultipart();
+        BodyPart parte = new MimeBodyPart();
+        parte.setText("Lo siento no está registrado para poder usar este sistema");
+        multiPartes.addBodyPart(parte);
+        return multiPartes;
+    }
+
     public void iniciar() {
         if (!isRunning()) {
             if ((hiloIntentoConexion != null) && (hiloIntentoConexion.isAlive())) {
@@ -140,7 +300,7 @@ public class LectorBandejaCorreo implements Runnable {
             @Override
             public void run() {
                 String mensajeFalloEvento = "Fallo el intento de conexion";
-                notificarEvento("Intentando conectarse.");
+                notificarEvento("Intentando conectarse");
                 try {
                     store = sesion.getStore();
                     if (!store.isConnected()) {
@@ -164,6 +324,7 @@ public class LectorBandejaCorreo implements Runnable {
                         @Override
                         public void messagesAdded(MessageCountEvent e) {
                             super.messagesAdded(e);
+                            nuevosMensajes = e.getMessages();
                             notificarEvento("Se ha detectado la llegada de " + e.getMessages().length + " mensaje(s)");
                         }
                     });
@@ -185,18 +346,40 @@ public class LectorBandejaCorreo implements Runnable {
                     }
                     notificarEvento(mensajeFalloEvento);
                 } catch (MessagingException ex) {
-                    Logger.getLogger(LectorBandejaCorreo.class.getName()).log(Level.SEVERE, null, ex);
+                    LOG.log(Level.SEVERE, null, ex);
                     notificarError("Error inesperado al intentar conectarse: " + ex.getMessage());
                     notificarEvento(mensajeFalloEvento);
                 }
             }
-        });
+        }, "HiloIntentoDeConexion");
         hiloIntentoConexion.start();
+    }
+
+    private static final long MAXIMO_TIEMPO_ESPERANDO = 300000; // 5 minutos
+
+    private void crearHiloMantenerConexion() {
+        hiloManterConexionActiva = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        Thread.sleep(MAXIMO_TIEMPO_ESPERANDO);
+                        notificarEvento("Tiempo de espera máximo agotado");
+                        bandejaEntrada.doCommand(comandoNOP);
+                    } catch (InterruptedException | FolderClosedException ex) {
+                        return;
+                    } catch (MessagingException ex) {
+                        LOG.log(Level.SEVERE, Thread.currentThread().getName(), ex);
+                    }
+                }
+            }
+        }, "HiloMantenerConexionActiva");
+        hiloManterConexionActiva.start();
     }
 
     private void crearHiloPrincipal() {
         setRunning(true);
-        hiloPrincipal = new Thread(this);
+        hiloPrincipal = new Thread(this, "HiloPrincipalLectorBandeja");
         hiloPrincipal.start();
     }
 
@@ -230,10 +413,10 @@ public class LectorBandejaCorreo implements Runnable {
             input = new FileInputStream("config.properties");
             prop.load(input);
         } catch (FileNotFoundException | SecurityException ex) {
-            Logger.getLogger(LectorBandejaCorreo.class.getName()).log(Level.SEVERE, null, ex);
+            LOG.log(Level.WARNING, null, ex);
             throw new RuntimeException("No se encuentra el archivo de propiedes, o no tiene permisos para leer el archivo");
         } catch (IOException ex) {
-            Logger.getLogger(LectorBandejaCorreo.class.getName()).log(Level.SEVERE, null, ex);
+            LOG.log(Level.WARNING, null, ex);
             throw new RuntimeException("Error leyendo el archivo de propiedades: " + ex.getMessage());
         } finally {
             if (input != null) {
@@ -295,9 +478,9 @@ public class LectorBandejaCorreo implements Runnable {
         if (isRunning()) {
             setRunning(false);
             try {
-                bandejaEntrada.getMessageCount();
+                bandejaEntrada.doCommand(comandoNOP);
             } catch (MessagingException ex) {
-                Logger.getLogger(LectorBandejaCorreo.class.getName()).log(Level.SEVERE, null, ex);
+                LOG.log(Level.WARNING, Thread.currentThread().getName(), ex);
             }
         }
     }

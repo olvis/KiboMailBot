@@ -5,7 +5,7 @@
  */
 package kibomailbot;
 
-import bo.com.kibo.mailbot.JFramePrincipal;
+import bo.com.kibo.mailbot.ui.JFramePrincipal;
 /**
  *
  * @author Olvinho

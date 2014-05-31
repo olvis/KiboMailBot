@@ -3,8 +3,10 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package bo.com.kibo.mailbot;
+package bo.com.kibo.mailbot.ui;
 
+import bo.com.kibo.mailbot.LectorBandejaCorreo;
+import bo.com.kibo.mailbot.intf.ILectorBandejaEscuchador;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -93,22 +95,21 @@ public class JFramePrincipal extends javax.swing.JFrame implements ILectorBandej
                         .addContainerGap()
                         .addComponent(jScrollPane1))
                     .addGroup(layout.createSequentialGroup()
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(layout.createSequentialGroup()
-                                .addGap(141, 141, 141)
-                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                                    .addGroup(layout.createSequentialGroup()
-                                        .addComponent(jButtonIniciar, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                        .addComponent(jButtonParar, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                        .addComponent(jButtonConfigurar, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                                    .addComponent(jLabel1)))
-                            .addGroup(layout.createSequentialGroup()
-                                .addContainerGap()
-                                .addComponent(jButtonLimpiar)))
-                        .addGap(0, 130, Short.MAX_VALUE)))
+                        .addContainerGap()
+                        .addComponent(jButtonLimpiar)
+                        .addGap(0, 558, Short.MAX_VALUE)))
                 .addContainerGap())
+            .addGroup(layout.createSequentialGroup()
+                .addGap(178, 178, 178)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(jButtonIniciar, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jButtonParar, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jButtonConfigurar, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(jLabel1))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -202,7 +203,7 @@ public class JFramePrincipal extends javax.swing.JFrame implements ILectorBandej
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                adicionarLineaLog("Lector de bandeja iniciado.");
+                adicionarLineaLog("Lector de bandeja iniciado");
                 jButtonIniciar.setEnabled(false);
                 jButtonConfigurar.setEnabled(false);
                 jButtonParar.setEnabled(true);
@@ -222,7 +223,7 @@ public class JFramePrincipal extends javax.swing.JFrame implements ILectorBandej
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                adicionarLineaLog("Lector de bandeja parado.");
+                adicionarLineaLog("Lector de bandeja detenido");
                 jButtonIniciar.setEnabled(true);
                 jButtonConfigurar.setEnabled(true);
                 jButtonParar.setEnabled(false);

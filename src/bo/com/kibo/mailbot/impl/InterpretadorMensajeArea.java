@@ -4,15 +4,12 @@
  * and open the template in the editor.
  */
 
-package bo.com.kibo.mailbot;
+package bo.com.kibo.mailbot.impl;
 
 /**
  *
  * @author Olvinho
  */
-public interface ILectorBandejaEscuchador {
-    void alIniciar();
-    void alParar();
-    void alRecibirEvento(String mensaje);
-    void alOcurrirError(String mensaje);
+public class InterpretadorMensajeArea extends InterpretadorMensajeGenerico{
+    
 }
