@@ -15,6 +15,7 @@ import com.sun.mail.iap.ProtocolException;
 import com.sun.mail.imap.IMAPFolder;
 import com.sun.mail.imap.protocol.IMAPProtocol;
 import com.sun.mail.util.MailConnectException;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -48,6 +49,12 @@ import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 import javax.mail.search.FlagTerm;
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 /**
  *
@@ -76,7 +83,7 @@ public class LectorBandejaCorreo implements Runnable {
     private Session sesion;
     private IMAPFolder bandejaEntrada;
     private Message[] nuevosMensajes;
-    private MimeMessage respuesta;
+
     private final IMAPFolder.ProtocolCommand comandoNOP;
 
     private Thread hiloPrincipal;
@@ -123,6 +130,7 @@ public class LectorBandejaCorreo implements Runnable {
             FlagTerm ft = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
             try {
                 if (!bandejaEntrada.isOpen()) {
+                    notificarEvento("Abriendo bandeja de entrada");
                     bandejaEntrada.open(Folder.READ_WRITE);
                     if (!hiloManterConexionActiva.isAlive()) {
                         crearHiloMantenerConexion();
@@ -141,9 +149,9 @@ public class LectorBandejaCorreo implements Runnable {
                 for (i = 0; i < mensajes.length; i++) {
                     Message mensaje = mensajes[i];
                     mensaje.setFlag(Flags.Flag.SEEN, true);
-                    notificarEvento("Procesando mensaje " + (i + 1) + " de " + mensajes.length);
+                    notificarEvento("..Procesando mensaje " + (i + 1) + " de " + mensajes.length);
                     procesarMensaje(mensaje);
-                    notificarEvento("Mensaje " + (i + 1) + " de " + mensajes.length + " procesado");
+                    notificarEvento("..Mensaje " + (i + 1) + " de " + mensajes.length + " procesado");
                 }
                 if (isRunning()) {
                     notificarEvento("Esperando nuevos mensajes");
@@ -170,7 +178,7 @@ public class LectorBandejaCorreo implements Runnable {
         if (hiloManterConexionActiva != null && hiloManterConexionActiva.isAlive()) {
             hiloManterConexionActiva.interrupt();
         }
-
+        
         try {
             if (bandejaEntrada.isOpen()) {
                 bandejaEntrada.close(false);
@@ -188,10 +196,11 @@ public class LectorBandejaCorreo implements Runnable {
     }
 
     private static final Pattern patronMail = Pattern.compile("[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+");
+    private IInterpretadorMensaje interprete;
+    private File adjunto;
 
     private void procesarMensaje(Message mensaje) {
         int numeroMensaje = mensaje.getMessageNumber();
-        //DateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
         try {
             String emailRemitente = "";
             String asunto = mensaje.getSubject();
@@ -203,60 +212,112 @@ public class LectorBandejaCorreo implements Runnable {
             if (!"".equals(emailRemitente)) {
                 //Verificamos si esta registrado
                 Address[] arrayFrom = {new InternetAddress(email)};
+                MimeMessage respuesta;
                 respuesta = (MimeMessage) mensaje.reply(false);
                 respuesta.setFrom(arrayFrom[0]);
                 respuesta.setReplyTo(arrayFrom);
                 respuesta.addRecipient(Message.RecipientType.TO, new InternetAddress(emailRemitente));
                 IUsuarioBO usuarioBO = FactoriaObjetosNegocio.getInstance().getIUsuarioBO();
-                //System.out.printf("[%s] Antes de consultar el IdUsuario por Correo\n", dateFormat.format(new Date()));
                 Integer idUsuario = usuarioBO.getIdUsuarioPorEmail(emailRemitente);
-                //System.out.printf("[%s] Fin de la consulta\n" , dateFormat.format(new Date()));
                 if (idUsuario != null) {
-                    boolean leerAdjunto = false;
-                    asunto = corregirAsunto(asunto);
-                    if (!"".equals(asunto)) {
-                        int i = asunto.indexOf(UtilitariosMensajes.SEPERADOR_PARAMETROS);
-                        if (i != -1) {
-                            String nombreEntidad = asunto.substring(0, i);
-                            IInterpretadorMensaje interprete = InterpretadorMensajeGenerico.getMapaObjetos().get(nombreEntidad);
-                            if (interprete != null) {
-                                asunto = asunto.substring(i, asunto.length());
-                                interprete.setParametros(asunto);
-                                interprete.setNombreEntidad(nombreEntidad);
-                                Multipart cuerpo = interprete.interpretar();
-                                if (cuerpo != null){
-                                    respuesta.setContent(cuerpo);
-                                }else{
-                                    leerAdjunto = true;
-                                }
-                            } else {
-                                //No se encontro un interpete para el asunto
-                                leerAdjunto = true;
-                            }
-                        }
-                        else{
-                            leerAdjunto =  true;
-                        }
-                    } else {
-                        //No existe asunto
-                        leerAdjunto = true;
+                    Multipart cuerpo = procesarPorAsunto(asunto, idUsuario);
+                    if (cuerpo == null) {
+                        cuerpo = procesarPorAdjunto(mensaje, idUsuario);
                     }
-
-                    if (leerAdjunto) {
-                        //No se pudo procesar por asunto, leer el adjunto si tiene
-
-                    }
+                    respuesta.setContent(cuerpo);
                 } else {
                     respuesta.setContent(getMensajeUsuarioNoRegistrado());
                 }
-                //System.out.printf("[%s] Antes de enviar respuesta \n", dateFormat.format(new Date()));
+                notificarEvento("....Enviando respuesta");
                 Transport.send(respuesta);
-                //System.out.printf("[%s] La respuesta fue enviada \n", dateFormat.format(new Date()));
+                notificarEvento("....La respuesta fue enviada");
+                //Eliminamos archivos temporales
+                if (interprete != null) {
+                    for (File archivo : interprete.obtenerArchivoTemporalesCreados()) {
+                        archivo.delete();
+                    }
+                    interprete.obtenerArchivoTemporalesCreados().clear();
+                }
+                if (adjunto != null) {
+                    adjunto.delete();
+                }
             } else {
-                notificarEvento("Imposible determinar el remitente, el mensaje será ignorado");
+                notificarEvento("....Imposible determinar el remitente, el mensaje será ignorado");
             }
         } catch (MessagingException ex) {
             LOG.log(Level.SEVERE, "Error procesando mensaje #" + numeroMensaje, ex);
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, "Error IO procesando mensaje #" + numeroMensaje, ex);
+            notificarError(ex.getMessage());
+        }
+    }
+
+    private Multipart procesarPorAsunto(String asunto, Integer idUsuario) throws MessagingException, IOException {
+        asunto = corregirAsunto(asunto);
+        if ("".equals(asunto)) {
+            return null;
+        }
+        int i = asunto.indexOf(UtilitariosMensajes.SEPERADOR_PARAMETROS);
+        if (i == -1) {
+            return null;
+        }
+        String nombreEntidad = asunto.substring(0, i);
+        nombreEntidad = nombreEntidad.replace(" ", "");
+        interprete = InterpretadorMensajeGenerico.getMapaObjetos().get(nombreEntidad);
+        if (interprete == null) {
+            return null;
+        }
+        asunto = asunto.substring(i + 1, asunto.length());
+        interprete.setParametros(asunto);
+        interprete.setNombreEntidad(nombreEntidad);
+        interprete.setIdUsuario(idUsuario);
+        Multipart cuerpo;
+        cuerpo = interprete.interpretar();
+        return cuerpo;
+    }
+
+    private Multipart procesarPorAdjunto(Message mensaje, Integer idUsuario) throws MessagingException {
+        adjunto = null;
+        try {
+            //No se pudo procesar por asunto, leer el adjunto si tiene
+            adjunto = UtilitariosMensajes.bajarPrimerAdjunto(mensaje);
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, null, ex);
+            return getMensajeUsuarioAyuda();
+        }
+        FileInputStream fis = null;
+        try {
+            Workbook libro;
+            fis = new FileInputStream(adjunto);
+            libro = WorkbookFactory.create(fis);
+            Sheet hoja = libro.getSheetAt(0);
+            Row fila = hoja.getRow(0);
+            if (fila == null) {
+                return getMensajeUsuarioAyuda();
+            }
+            Cell celda = fila.getCell(0);
+            if (celda == null) {
+                return getMensajeUsuarioAyuda();
+            }
+            String nombreEntidad = celda.getStringCellValue();
+            interprete = InterpretadorMensajeGenerico.getMapaObjetos().get(nombreEntidad);
+            if (interprete == null) {
+                return getMensajeUsuarioAyuda();
+            }
+            interprete.setIdUsuario(idUsuario);
+            interprete.setNombreEntidad(nombreEntidad);
+            return interprete.interpretarHojaExcel(hoja);
+        } catch (IOException | InvalidFormatException ex) {
+            LOG.log(Level.SEVERE, "Error Leyendo adjunto", ex);
+            return getMensajeUsuarioAyuda();
+        } finally {
+            if (fis != null) {
+                try {
+                    fis.close();
+                } catch (IOException ex) {
+                    Logger.getLogger(LectorBandejaCorreo.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
         }
     }
 
@@ -265,7 +326,7 @@ public class LectorBandejaCorreo implements Runnable {
             return "";
         }
 
-        asunto = asunto.replace(" ", "").toLowerCase(); //Quitamos espacios en blanco y llevamos a minusculas
+        asunto = asunto.toLowerCase().replaceAll(" ", ""); //llevamos a minusculas
         if (asunto.length() > 3) {
             if (asunto.substring(0, 2).equals("re:")) {
                 asunto = asunto.substring(3, asunto.length() - 1);
@@ -280,6 +341,14 @@ public class LectorBandejaCorreo implements Runnable {
         Multipart multiPartes = new MimeMultipart();
         BodyPart parte = new MimeBodyPart();
         parte.setText("Lo siento no está registrado para poder usar este sistema");
+        multiPartes.addBodyPart(parte);
+        return multiPartes;
+    }
+
+    private Multipart getMensajeUsuarioAyuda() throws MessagingException {
+        Multipart multiPartes = new MimeMultipart();
+        BodyPart parte = new MimeBodyPart();
+        parte.setText("El mensaje no fue reconocido, esta es la ayuda");
         multiPartes.addBodyPart(parte);
         return multiPartes;
     }

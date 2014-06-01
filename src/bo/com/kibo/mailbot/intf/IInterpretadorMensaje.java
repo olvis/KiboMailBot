@@ -6,8 +6,12 @@
 
 package bo.com.kibo.mailbot.intf;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
+import org.apache.poi.ss.usermodel.Sheet;
 
 /**
  *
@@ -21,6 +25,10 @@ public interface IInterpretadorMensaje {
    
     void setNombreEntidad(String nombre);
     
-    Multipart interpretar()throws MessagingException;
+    Multipart interpretar()throws MessagingException, IOException;
+    
+    List<File> obtenerArchivoTemporalesCreados();
+    
+    Multipart interpretarHojaExcel(Sheet hojaExcel)throws MessagingException;
     
 }
