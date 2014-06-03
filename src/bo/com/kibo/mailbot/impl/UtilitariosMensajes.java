@@ -23,7 +23,7 @@ import javax.mail.internet.MimeMultipart;
  */
 public class UtilitariosMensajes {
 
-    public static char SEPERADOR_PARAMETROS = '.';
+    public static String SEPERADOR_PARAMETROS = "-";
 
     public static File reservarNombre(String nombre) throws IOException {
         File f = new File(nombre);

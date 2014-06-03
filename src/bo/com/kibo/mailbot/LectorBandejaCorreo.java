@@ -285,8 +285,12 @@ public class LectorBandejaCorreo implements Runnable {
             LOG.log(Level.SEVERE, null, ex);
             return getMensajeUsuarioAyuda();
         }
+        if (adjunto == null){
+            return getMensajeUsuarioAyuda();
+        }
         FileInputStream fis = null;
         try {
+           
             Workbook libro;
             fis = new FileInputStream(adjunto);
             libro = WorkbookFactory.create(fis);

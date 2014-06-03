@@ -10,8 +10,13 @@ import bo.com.kibo.bl.exceptions.BusinessExceptionMessage;
 import bo.com.kibo.bl.intf.IGenericoBO;
 import bo.com.kibo.mailbot.intf.IInterpretadorMensaje;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,17 +28,21 @@ import javax.mail.MessagingException;
 import javax.mail.Multipart;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMultipart;
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 /**
  *
  * @author Olvinho
  * @param <T> Clase entidad
+ * @param <ID> Clase que representa el id
  * @param <BO> Clase de negocio
  */
-public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, ?>> implements IInterpretadorMensaje {
+public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, BO extends IGenericoBO<T, ID>> implements IInterpretadorMensaje {
 
     private static final ThreadLocal<Map<String, IInterpretadorMensaje>> caja = new ThreadLocal<>();
 
@@ -42,7 +51,7 @@ public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, 
         if (mapa == null) {
             mapa = new HashMap<>();
             mapa.put("area", new InterpretadorMensajeArea());
-
+            mapa.put("faja", new InterpretadorMensajeFaja());
             caja.set(mapa);
         }
         return mapa;
@@ -74,15 +83,19 @@ public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, 
         if (parametros == null || "".equals(parametros)) {
             return null;
         }
-        String[] params = parametros.split(UtilitariosMensajes.SEPERADOR_PARAMETROS + "");
+        String[] params = parametros.split(UtilitariosMensajes.SEPERADOR_PARAMETROS);
+        if (params.length == 0){
+            params = new String[]{parametros};
+        }
         String idCargar = "";
-        if (params.length > 1)
+        if (params.length > 1) {
             idCargar = params[1];
+        }
         switch (params[0]) {
             case "plantilla":
                 return enviarPlantilla(true, idCargar);
             case "cargar":
-               return enviarPlantilla(false, idCargar);
+                return enviarPlantilla(false, idCargar);
         }
         return null;
     }
@@ -96,17 +109,79 @@ public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, 
     }
 
     private Multipart enviarPlantilla(boolean plantillaNueva, String idCargar) throws MessagingException, IOException {
-        Multipart cuerpo = new MimeMultipart();
-        BodyPart mensaje = new MimeBodyPart();
-        mensaje.setText("La plantilla de " + nombreEntidad + " para poder insertar está adjunta");
-        BodyPart adjunto = new MimeBodyPart();
-        String nombreArchivoOriginal = "plantillas\\" + nombreEntidad + ".xlsx";
+        String nombreArchivoOrigen;
+        List<T> lista = null;
+        T entidad = null;
+        if (!plantillaNueva) {
+            if ("todos".equals(idCargar)) {
+                lista = getObjetoNegocio().obtenerTodos();
+                nombreArchivoOrigen = nombreEntidad + "-" + "lista";
+            } else {
+                ID id;
+                try {
+                    id = convertirId(idCargar);
+                } catch (Exception ex) {
+                    return enviarIdCargarNoValido();
+                }
+                entidad = getObjetoNegocio().recuperarPorId(id);
+                if (entidad == null) {
+                    return enviarEntidadNoExiste(idCargar);
+                }
+                nombreArchivoOrigen = nombreEntidad;
+            }
+        } else {
+            nombreArchivoOrigen = nombreEntidad;
+        }
+
+        String nombreArchivoOriginal = "plantillas\\" + nombreArchivoOrigen + ".xlsx";
         File archivoCopia = UtilitariosMensajes.reservarNombre(nombreEntidad);
         UtilitariosMensajes.copiarArchivo(new File(nombreArchivoOriginal), archivoCopia);
         archivosTemporales.add(archivoCopia);
-        if (abrirPlantillaAntesDeEnviar()) {
-            //Abrir el archivo para hacer las preparaciones necesarias
+        FileInputStream fis = null;
+        OutputStream os = null;
+        try {
+            Workbook libro;
+            fis = new FileInputStream(archivoCopia);
+            libro = WorkbookFactory.create(fis);
+            hojaActual = libro.getSheetAt(0);
+            if (plantillaNueva){
+                preparPlantillaAntesDeEnviar();
+            }
+            else{
+                if (lista != null){
+                    mostrarLista(lista);
+                }
+                else{
+                    mostrarEntidad(entidad);
+                }
+            }
+            //Guardamos cambio
+            os = new FileOutputStream(archivoCopia);
+            libro.write(os);
+        } catch (InvalidFormatException ex) {
+
+        } finally {
+            if (fis != null) {
+                fis.close();
+            }
+            if (os != null) {
+                os.close();
+            }
         }
+        String textoMensaje;
+        if (plantillaNueva){
+            textoMensaje = "La plantilla está adjunto a este mensaje.";
+        }
+        else if (lista != null){
+            textoMensaje = "La consulta ha devuelto " + lista.size() + " registro(s).";
+        }
+        else{
+            textoMensaje = "El registro solicitado está adjunto a este mensaje";
+        }
+        Multipart cuerpo = new MimeMultipart();
+        BodyPart mensaje = new MimeBodyPart();
+        mensaje.setText(textoMensaje);
+        BodyPart adjunto = new MimeBodyPart();
         DataSource origen = new FileDataSource(archivoCopia);
         adjunto.setDataHandler(new DataHandler(origen));
         adjunto.setFileName(nombreEntidad + ".xlsx");
@@ -118,10 +193,6 @@ public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, 
     @Override
     public void setNombreEntidad(String nombre) {
         this.nombreEntidad = nombre;
-    }
-
-    protected boolean abrirPlantillaAntesDeEnviar() {
-        return false;
     }
 
     @Override
@@ -169,10 +240,27 @@ public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, 
         return cuerpo;
     }
 
+    protected Multipart enviarEntidadNoExiste(String id) throws MessagingException {
+        Multipart cuerpo = new MimeMultipart();
+        BodyPart texto = new MimeBodyPart();
+        texto.setText("El regitro con Id :" + id + " no existe");
+        cuerpo.addBodyPart(texto);
+        return cuerpo;
+    }
+
     protected Multipart enviarInserccionExitosa(T entidad) throws MessagingException {
         Multipart cuerpo = new MimeMultipart();
         BodyPart texto = new MimeBodyPart();
         texto.setText("La insercción se ha efectuado exitosamente. El identificador del registro es: " + getId(entidad));
+        cuerpo.addBodyPart(texto);
+        return cuerpo;
+
+    }
+
+    protected Multipart enviarIdCargarNoValido() throws MessagingException {
+        Multipart cuerpo = new MimeMultipart();
+        BodyPart texto = new MimeBodyPart();
+        texto.setText("No se pudo recuperar el Id especificado, debe enviar un número válido o la cadena todos para recuperar todos los registros");
         cuerpo.addBodyPart(texto);
         return cuerpo;
 
@@ -217,6 +305,66 @@ public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, 
         return enviarModificacionExitosa(entidad);
     }
 
+    protected Integer convertirIdAEntero(String cadena) {
+        return new Integer(cadena);
+    }
+    
+    protected void preparPlantillaAntesDeEnviar(){
+        
+    }
+    
+    protected void setValorCelda(int rowIndex, int colIndex, Integer valor){
+        Cell celda = getCelda(rowIndex, colIndex);
+        if (valor != null){
+            celda.setCellValue(valor);
+        }
+    }
+    
+    protected void setValorCelda(int rowIndex, int colIndex, String valor){
+        Cell celda = getCelda(rowIndex, colIndex);
+        if (valor != null){
+            celda.setCellValue(valor);
+        }
+    }
+    
+    protected void setValorCelda(int rowIndex, int colIndex, Float valor){
+        Cell celda = getCelda(rowIndex, colIndex);
+        if (valor != null){
+            celda.setCellValue(valor);
+        }
+    }
+    
+    protected void setValorCelda(int rowIndex, int colIndex, Short valor){
+        Cell celda = getCelda(rowIndex, colIndex);
+        if (valor != null){
+            celda.setCellValue(valor);
+        }
+    }
+    
+    protected void setValorCelda(int rowIndex, int colIndex, Date valor){
+        Cell celda = getCelda(rowIndex, colIndex);
+        if (valor != null){
+            celda.setCellValue(valor);
+        }
+    }
+    
+    protected void setValorCelda(int rowIndex, int colIndex, Double valor){
+        Cell celda = getCelda(rowIndex, colIndex);
+        if (valor != null){
+            celda.setCellValue(valor);
+        }
+    }
+    
+    protected void setValorCelda(int rowIndex, int colIndex, Byte valor){
+        Cell celda = getCelda(rowIndex, colIndex);
+        if (valor != null){
+            celda.setCellValue(valor);
+        }
+    }
+    
+    
+    
+
     abstract T convertirHojaEnEntidad();
 
     abstract BO getObjetoNegocio();
@@ -224,5 +372,11 @@ public abstract class InterpretadorMensajeGenerico<T, BO extends IGenericoBO<T, 
     abstract boolean esNuevo(T entidad);
 
     abstract String getId(T entidad);
+
+    abstract ID convertirId(String cadena) throws Exception;
+    
+    abstract void mostrarLista(List<T> lista);
+    
+    abstract void mostrarEntidad(T entidad);
 
 }
