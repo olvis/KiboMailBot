@@ -31,7 +31,7 @@ public class InterpretadorMensajeArea extends InterpretadorMensajeGenerico<Area,
 
         //Codigo
         celda = getCelda(4, 2);
-        entidad.setCodigo(celda.getStringCellValue());
+        entidad.setCodigo(getValorCeldaCadena(celda));
 
         //Año inicial
         celda = getCelda(5, 2);
@@ -59,7 +59,7 @@ public class InterpretadorMensajeArea extends InterpretadorMensajeGenerico<Area,
 
         //Banda UTM
         celda = getCelda(8, 2);
-        entidad.setBandaUTM(celda.getStringCellValue());
+        entidad.setBandaUTM(getValorCeldaCadena(celda));
         //Poligono
         int i = 12;
         do {

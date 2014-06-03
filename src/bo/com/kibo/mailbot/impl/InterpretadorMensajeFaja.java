@@ -35,7 +35,7 @@ public class InterpretadorMensajeFaja extends InterpretadorMensajeGenerico<Faja,
         }
         //Bloque
         celda = getCelda(4, 2);
-        entidad.setBloque(celda.getStringCellValue());
+        entidad.setBloque(getValorCeldaCadena(celda));
 
         //Numero
         celda = getCelda(5, 2);
@@ -47,7 +47,7 @@ public class InterpretadorMensajeFaja extends InterpretadorMensajeGenerico<Faja,
         //Area
         entidad.setArea(new Area());
         celda = getCelda(6, 2);
-        entidad.getArea().setCodigo(celda.getStringCellValue());
+        entidad.getArea().setCodigo(getValorCeldaCadena(celda));
 
         int i = 10;
         do {

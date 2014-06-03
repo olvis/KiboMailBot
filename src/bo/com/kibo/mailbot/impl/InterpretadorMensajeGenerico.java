@@ -287,10 +287,10 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
         try {
             if (esNuevo(entidad)) {
                 esInserccion = true;
-                getObjetoNegocio().insertar(entidad);
+                entidad =  getObjetoNegocio().insertar(entidad);
             } else {
                 esInserccion = false;
-                getObjetoNegocio().actualizar(entidad);
+                entidad = getObjetoNegocio().actualizar(entidad);
 
             }
         } catch (BusinessException e) {
@@ -362,6 +362,25 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
         }
     }
     
+    protected String getValorCeldaCadena(Cell celda){
+        switch (celda.getCellType()){
+            case Cell.CELL_TYPE_STRING:
+                return celda.getStringCellValue();
+            case Cell.CELL_TYPE_BOOLEAN:
+                return String.valueOf(celda.getBooleanCellValue());
+            case Cell.CELL_TYPE_NUMERIC:
+                double valor = celda.getNumericCellValue();
+                if (valor % 1 == 0){
+                    return String.valueOf((int)valor);
+                }
+                return String.valueOf(valor);
+            case Cell.CELL_TYPE_FORMULA:
+            case Cell.CELL_TYPE_ERROR:
+            case Cell.CELL_TYPE_BLANK:
+            default:
+                return "";
+        }
+    }
     
     
 
