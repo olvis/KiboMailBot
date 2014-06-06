@@ -8,12 +8,12 @@ package bo.com.kibo.mailbot.impl;
 import bo.com.kibo.bl.impl.control.FactoriaObjetosNegocio;
 import bo.com.kibo.bl.intf.IFormularioCensoBO;
 import bo.com.kibo.entidades.Area;
+import bo.com.kibo.entidades.Calidad;
+import bo.com.kibo.entidades.Especie;
+import bo.com.kibo.entidades.Faja;
 import bo.com.kibo.entidades.FormularioCenso;
 import bo.com.kibo.mailbot.intf.IInterpretadorFormularioDasometrico;
-import java.io.IOException;
 import java.util.List;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
 
 /**
  *
@@ -68,19 +68,38 @@ public class InterpretadorMensajeCenso extends InterpretadorMensajeGenerico<Form
     void mostrarEntidad(FormularioCenso entidad) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
-
-    @Override
-    protected Multipart enviarPlantilla(boolean plantillaNueva, String idCargar) throws MessagingException, IOException {
-        return super.enviarPlantilla(plantillaNueva, idCargar); //To change body of generated methods, choose Tools | Templates.
-    }
-
+    
     @Override
     protected void preparPlantillaAntesDeEnviar() {
         if (super.isCargarPlantillaFormularios()) {
             cargarAreasAPlantillaFormularios();
         } else {
             //Cargamos los datos para preparar la plantilla
-            
+            String[] valores;
+            int i;
+            //Areas
+            setValorCelda(4, 2, area.getCodigo());
+            //Fajas
+            List<Faja> fajas = FactoriaObjetosNegocio.getInstance().getFajaBO().obtenerFajasSegunArea(area.getId());
+            valores = new String[fajas.size()];
+            for(i = 0; i < fajas.size(); i++){
+                valores[i]= fajas.get(i).getBloque() + "-" + fajas.get(i).getNumero();
+            }
+            agregarValidacionLista(4, 4, 5, 5, valores, true, true);
+            //Especies
+            List<Especie> especies = FactoriaObjetosNegocio.getInstance().getEspecieBO().obtenerTodos();
+            valores = new String[especies.size()];
+            for(i = 0; i < especies.size(); i++){
+                valores[i]= especies.get(i).getNombre();
+            }
+            agregarValidacionLista(8, 37, 2, 2, valores, true, false);
+            //Calidades
+            List<Calidad> calidades = FactoriaObjetosNegocio.getInstance().getCalidadBO().obtenerTodos();
+            valores = new String[calidades.size()];
+            for(i = 0; i < calidades.size(); i++){
+                valores[i]= calidades.get(i).getCodigo();
+            }
+            agregarValidacionLista(8, 37, 5, 5, valores, true, false);
         }
     }
 

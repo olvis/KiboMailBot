@@ -99,7 +99,6 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
     public void setCargarPlantillaFormularios(boolean cargarPlantillaFormularios) {
         this.cargarPlantillaFormularios = cargarPlantillaFormularios;
     }
-    
 
     @Override
     public Multipart interpretar() throws MessagingException, IOException {
@@ -153,10 +152,10 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
                 nombreArchivoOrigen = nombreEntidad;
             }
         } else {
-            nombreArchivoOrigen = nombreEntidad; 
-            if (this instanceof IInterpretadorFormularioDasometrico){
-                if (cargarPlantillaFormularios){
-                      nombreArchivoOrigen = "plantillafrm";
+            nombreArchivoOrigen = nombreEntidad;
+            if (this instanceof IInterpretadorFormularioDasometrico) {
+                if (cargarPlantillaFormularios) {
+                    nombreArchivoOrigen = "plantillafrm";
                 }
             }
         }
@@ -336,11 +335,12 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
     protected void preparPlantillaAntesDeEnviar() {
 
     }
-    
-    /***
+
+    /**
+     * *
      * Carga las áreas a la plantilla para solicitar un formulario dasométrico
      */
-    protected void cargarAreasAPlantillaFormularios(){
+    protected void cargarAreasAPlantillaFormularios() {
         CellRangeAddressList celdaArea = new CellRangeAddressList(4, 4, 2, 2);
         List<Area> areas = FactoriaObjetosNegocio.getInstance().getAreaBO().obtenerTodos();
         String[] codigos = new String[areas.size()];
@@ -408,13 +408,16 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
         return InterpretadorMensajeGenerico.getValorCelda(celda);
     }
 
-    /***
+    /**
+     * *
      * Devuelve el valor de la celda en cadena
+     *
      * @param celda La celda que contien el valor
-     * @return El valor de la celda en cadena, si la celda es nula, devuelve una cadena vacía
+     * @return El valor de la celda en cadena, si la celda es nula, devuelve una
+     * cadena vacía
      */
     public static String getValorCelda(Cell celda) {
-        if (celda == null){
+        if (celda == null) {
             return "";
         }
         switch (celda.getCellType()) {
@@ -434,6 +437,17 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
             default:
                 return "";
         }
+    }
+
+    protected void agregarValidacionLista(int primerFila, int ultimaFila, int primerColumna, int ultimaColumna,
+            String[] valores, boolean mostrarCombo, boolean mostrarError) {
+        CellRangeAddressList celdas = new CellRangeAddressList(primerFila, ultimaFila, primerColumna, ultimaColumna);
+        DataValidationHelper dvHelper = hojaActual.getDataValidationHelper();
+        DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(valores);
+        DataValidation validation = dvHelper.createValidation(dvConstraint, celdas);
+        validation.setSuppressDropDownArrow(mostrarCombo);
+        validation.setShowErrorBox(mostrarError);
+        hojaActual.addValidationData(validation);
     }
 
     abstract T convertirHojaEnEntidad();

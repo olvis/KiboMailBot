@@ -62,7 +62,7 @@ public class UtilitariosMensajes {
             FileOutputStream fos = null;
             InputStream is = null;
             try {
-                File salida = reservarNombre("temp\\" + parte.getFileName());
+                File salida = reservarNombre("temp/" + parte.getFileName());
                 is = parte.getInputStream();
                 fos = new FileOutputStream(salida);
                 byte[] buf = new byte[4096];

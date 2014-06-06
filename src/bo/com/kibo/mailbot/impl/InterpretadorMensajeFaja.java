@@ -118,22 +118,11 @@ public class InterpretadorMensajeFaja extends InterpretadorMensajeGenerico<Faja,
 
     @Override
     protected void preparPlantillaAntesDeEnviar() {
-        CellRangeAddressList celdaArea = new CellRangeAddressList(6, 6, 2, 2);
         List<Area> areas = FactoriaObjetosNegocio.getInstance().getAreaBO().obtenerTodos();
         String[] codigos = new String[areas.size()];
         for (int i = 0; i < areas.size(); i++) {
             codigos[i] = areas.get(i).getCodigo();
         }
-
-        DataValidationHelper dvHelper = hojaActual.getDataValidationHelper();
-        DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(codigos);
-        DataValidation validation = dvHelper.createValidation(dvConstraint, celdaArea);
-        validation.setSuppressDropDownArrow(true);
-        validation.setShowErrorBox(true);
-       
-        
-        hojaActual.addValidationData(validation);
-
+        agregarValidacionLista(6, 6, 2, 2, codigos, true, true);
     }
-
 }
