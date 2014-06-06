@@ -36,7 +36,9 @@ public class InterpretadorMensajeCenso extends InterpretadorMensajeGenerico<Form
 
     @Override
     FormularioCenso convertirHojaEnEntidad() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        FormularioCenso entidad = new FormularioCenso();
+        
+        return entidad;
     }
 
     @Override
