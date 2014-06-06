@@ -303,7 +303,7 @@ public class LectorBandejaCorreo implements Runnable {
             if (celda == null) {
                 return getMensajeUsuarioAyuda();
             }
-            String nombreEntidad = celda.getStringCellValue();
+            String nombreEntidad = InterpretadorMensajeGenerico.getValorCelda(celda).toLowerCase();
             interprete = InterpretadorMensajeGenerico.getMapaObjetos().get(nombreEntidad);
             if (interprete == null) {
                 return getMensajeUsuarioAyuda();

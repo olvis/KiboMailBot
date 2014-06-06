@@ -1,4 +1,4 @@
-/*
+ /*
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
@@ -7,7 +7,10 @@ package bo.com.kibo.mailbot.impl;
 
 import bo.com.kibo.bl.exceptions.BusinessException;
 import bo.com.kibo.bl.exceptions.BusinessExceptionMessage;
+import bo.com.kibo.bl.impl.control.FactoriaObjetosNegocio;
 import bo.com.kibo.bl.intf.IGenericoBO;
+import bo.com.kibo.entidades.Area;
+import bo.com.kibo.mailbot.intf.IInterpretadorFormularioDasometrico;
 import bo.com.kibo.mailbot.intf.IInterpretadorMensaje;
 import java.io.File;
 import java.io.FileInputStream;
@@ -28,8 +31,12 @@ import javax.mail.MessagingException;
 import javax.mail.Multipart;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMultipart;
+import org.apache.poi.hssf.util.CellRangeAddressList;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataValidation;
+import org.apache.poi.ss.usermodel.DataValidationConstraint;
+import org.apache.poi.ss.usermodel.DataValidationHelper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -52,6 +59,11 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
             mapa = new HashMap<>();
             mapa.put("area", new InterpretadorMensajeArea());
             mapa.put("faja", new InterpretadorMensajeFaja());
+            mapa.put("especie", new InterpretadorMensajeEspecie());
+            mapa.put("calidad", new IntepretadorMensajeCalidad());
+            mapa.put("carga", new InterpretadorMensajeCarga());
+            mapa.put("censo", new InterpretadorMensajeCenso());
+            mapa.put("dasometrico", new InterpretarPlantillaFormulario());
             caja.set(mapa);
         }
         return mapa;
@@ -63,9 +75,11 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
     protected List<File> archivosTemporales = new ArrayList<>();
     protected Sheet hojaActual;
     private BusinessException mensajesError;
+    private boolean cargarPlantillaFormularios;
 
     public InterpretadorMensajeGenerico() {
         parametros = "";
+        cargarPlantillaFormularios = true;
     }
 
     @Override
@@ -78,13 +92,22 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
         this.parametros = parametros;
     }
 
+    public boolean isCargarPlantillaFormularios() {
+        return cargarPlantillaFormularios;
+    }
+
+    public void setCargarPlantillaFormularios(boolean cargarPlantillaFormularios) {
+        this.cargarPlantillaFormularios = cargarPlantillaFormularios;
+    }
+    
+
     @Override
     public Multipart interpretar() throws MessagingException, IOException {
         if (parametros == null || "".equals(parametros)) {
             return null;
         }
         String[] params = parametros.split(UtilitariosMensajes.SEPERADOR_PARAMETROS);
-        if (params.length == 0){
+        if (params.length == 0) {
             params = new String[]{parametros};
         }
         String idCargar = "";
@@ -108,7 +131,7 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
         mensajesError.getMessages().add(message);
     }
 
-    private Multipart enviarPlantilla(boolean plantillaNueva, String idCargar) throws MessagingException, IOException {
+    protected Multipart enviarPlantilla(boolean plantillaNueva, String idCargar) throws MessagingException, IOException {
         String nombreArchivoOrigen;
         List<T> lista = null;
         T entidad = null;
@@ -130,10 +153,15 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
                 nombreArchivoOrigen = nombreEntidad;
             }
         } else {
-            nombreArchivoOrigen = nombreEntidad;
+            nombreArchivoOrigen = nombreEntidad; 
+            if (this instanceof IInterpretadorFormularioDasometrico){
+                if (cargarPlantillaFormularios){
+                      nombreArchivoOrigen = "plantillafrm";
+                }
+            }
         }
 
-        String nombreArchivoOriginal = "plantillas\\" + nombreArchivoOrigen + ".xlsx";
+        String nombreArchivoOriginal = "plantillas/" + nombreArchivoOrigen + ".xlsx";
         File archivoCopia = UtilitariosMensajes.reservarNombre(nombreEntidad);
         UtilitariosMensajes.copiarArchivo(new File(nombreArchivoOriginal), archivoCopia);
         archivosTemporales.add(archivoCopia);
@@ -144,14 +172,12 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
             fis = new FileInputStream(archivoCopia);
             libro = WorkbookFactory.create(fis);
             hojaActual = libro.getSheetAt(0);
-            if (plantillaNueva){
+            if (plantillaNueva) {
                 preparPlantillaAntesDeEnviar();
-            }
-            else{
-                if (lista != null){
+            } else {
+                if (lista != null) {
                     mostrarLista(lista);
-                }
-                else{
+                } else {
                     mostrarEntidad(entidad);
                 }
             }
@@ -169,13 +195,11 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
             }
         }
         String textoMensaje;
-        if (plantillaNueva){
-            textoMensaje = "La plantilla está adjunto a este mensaje.";
-        }
-        else if (lista != null){
+        if (plantillaNueva) {
+            textoMensaje = "La plantilla está adjunta a este mensaje.";
+        } else if (lista != null) {
             textoMensaje = "La consulta ha devuelto " + lista.size() + " registro(s).";
-        }
-        else{
+        } else {
             textoMensaje = "El registro solicitado está adjunto a este mensaje";
         }
         Multipart cuerpo = new MimeMultipart();
@@ -215,7 +239,7 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
 
     }
 
-    protected Multipart enviarErroresNegocio(BusinessException errores) throws MessagingException {
+    public static Multipart enviarErroresNegocio(BusinessException errores) throws MessagingException {
         Multipart cuerpo = new MimeMultipart();
         StringBuilder mensaje = new StringBuilder();
         mensaje.append("No se pudo completar la petición debido a los siguiente errores: \n");
@@ -287,7 +311,7 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
         try {
             if (esNuevo(entidad)) {
                 esInserccion = true;
-                entidad =  getObjetoNegocio().insertar(entidad);
+                entidad = getObjetoNegocio().insertar(entidad);
             } else {
                 esInserccion = false;
                 entidad = getObjetoNegocio().actualizar(entidad);
@@ -308,70 +332,100 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
     protected Integer convertirIdAEntero(String cadena) {
         return new Integer(cadena);
     }
-    
-    protected void preparPlantillaAntesDeEnviar(){
-        
+
+    protected void preparPlantillaAntesDeEnviar() {
+
     }
     
-    protected void setValorCelda(int rowIndex, int colIndex, Integer valor){
+    /***
+     * Carga las áreas a la plantilla para solicitar un formulario dasométrico
+     */
+    protected void cargarAreasAPlantillaFormularios(){
+        CellRangeAddressList celdaArea = new CellRangeAddressList(4, 4, 2, 2);
+        List<Area> areas = FactoriaObjetosNegocio.getInstance().getAreaBO().obtenerTodos();
+        String[] codigos = new String[areas.size()];
+        for (int i = 0; i < areas.size(); i++) {
+            codigos[i] = areas.get(i).getCodigo();
+        }
+        DataValidationHelper dvHelper = hojaActual.getDataValidationHelper();
+        DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(codigos);
+        DataValidation validation = dvHelper.createValidation(dvConstraint, celdaArea);
+        validation.setSuppressDropDownArrow(true);
+        validation.setShowErrorBox(true);
+        hojaActual.addValidationData(validation);
+    }
+
+    protected void setValorCelda(int rowIndex, int colIndex, Integer valor) {
         Cell celda = getCelda(rowIndex, colIndex);
-        if (valor != null){
+        if (valor != null) {
             celda.setCellValue(valor);
         }
     }
-    
-    protected void setValorCelda(int rowIndex, int colIndex, String valor){
+
+    protected void setValorCelda(int rowIndex, int colIndex, String valor) {
         Cell celda = getCelda(rowIndex, colIndex);
-        if (valor != null){
+        if (valor != null) {
             celda.setCellValue(valor);
         }
     }
-    
-    protected void setValorCelda(int rowIndex, int colIndex, Float valor){
+
+    protected void setValorCelda(int rowIndex, int colIndex, Float valor) {
         Cell celda = getCelda(rowIndex, colIndex);
-        if (valor != null){
+        if (valor != null) {
             celda.setCellValue(valor);
         }
     }
-    
-    protected void setValorCelda(int rowIndex, int colIndex, Short valor){
+
+    protected void setValorCelda(int rowIndex, int colIndex, Short valor) {
         Cell celda = getCelda(rowIndex, colIndex);
-        if (valor != null){
+        if (valor != null) {
             celda.setCellValue(valor);
         }
     }
-    
-    protected void setValorCelda(int rowIndex, int colIndex, Date valor){
+
+    protected void setValorCelda(int rowIndex, int colIndex, Date valor) {
         Cell celda = getCelda(rowIndex, colIndex);
-        if (valor != null){
+        if (valor != null) {
             celda.setCellValue(valor);
         }
     }
-    
-    protected void setValorCelda(int rowIndex, int colIndex, Double valor){
+
+    protected void setValorCelda(int rowIndex, int colIndex, Double valor) {
         Cell celda = getCelda(rowIndex, colIndex);
-        if (valor != null){
+        if (valor != null) {
             celda.setCellValue(valor);
         }
     }
-    
-    protected void setValorCelda(int rowIndex, int colIndex, Byte valor){
+
+    protected void setValorCelda(int rowIndex, int colIndex, Byte valor) {
         Cell celda = getCelda(rowIndex, colIndex);
-        if (valor != null){
+        if (valor != null) {
             celda.setCellValue(valor);
         }
     }
-    
-    protected String getValorCeldaCadena(Cell celda){
-        switch (celda.getCellType()){
+
+    protected String getValorCeldaCadena(Cell celda) {
+        return InterpretadorMensajeGenerico.getValorCelda(celda);
+    }
+
+    /***
+     * Devuelve el valor de la celda en cadena
+     * @param celda La celda que contien el valor
+     * @return El valor de la celda en cadena, si la celda es nula, devuelve una cadena vacía
+     */
+    public static String getValorCelda(Cell celda) {
+        if (celda == null){
+            return "";
+        }
+        switch (celda.getCellType()) {
             case Cell.CELL_TYPE_STRING:
                 return celda.getStringCellValue();
             case Cell.CELL_TYPE_BOOLEAN:
                 return String.valueOf(celda.getBooleanCellValue());
             case Cell.CELL_TYPE_NUMERIC:
                 double valor = celda.getNumericCellValue();
-                if (valor % 1 == 0){
-                    return String.valueOf((int)valor);
+                if (valor % 1 == 0) {
+                    return String.valueOf((int) valor);
                 }
                 return String.valueOf(valor);
             case Cell.CELL_TYPE_FORMULA:
@@ -381,8 +435,6 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
                 return "";
         }
     }
-    
-    
 
     abstract T convertirHojaEnEntidad();
 
@@ -393,9 +445,9 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
     abstract String getId(T entidad);
 
     abstract ID convertirId(String cadena) throws Exception;
-    
+
     abstract void mostrarLista(List<T> lista);
-    
+
     abstract void mostrarEntidad(T entidad);
 
 }

@@ -130,6 +130,8 @@ public class InterpretadorMensajeFaja extends InterpretadorMensajeGenerico<Faja,
         DataValidation validation = dvHelper.createValidation(dvConstraint, celdaArea);
         validation.setSuppressDropDownArrow(true);
         validation.setShowErrorBox(true);
+       
+        
         hojaActual.addValidationData(validation);
 
     }
