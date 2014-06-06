@@ -3,52 +3,87 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-
 package bo.com.kibo.mailbot.impl;
 
+import bo.com.kibo.bl.impl.control.FactoriaObjetosNegocio;
 import bo.com.kibo.bl.intf.ICargaBO;
 import bo.com.kibo.entidades.Carga;
 import java.util.List;
+import org.apache.poi.ss.usermodel.Cell;
 
 /**
  *
  * @author Olvinho
  */
-public class InterpretadorMensajeCarga extends  InterpretadorMensajeGenerico<Carga, Integer, ICargaBO>{
+public class InterpretadorMensajeCarga extends InterpretadorMensajeGenerico<Carga, Integer, ICargaBO> {
 
     @Override
     Carga convertirHojaEnEntidad() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        Carga entidad = new Carga();
+        Cell celda;
+        celda = getCelda(3, 2);
+        //Id
+        if (celda.getCellType() == Cell.CELL_TYPE_NUMERIC) {
+            entidad.setId((int) celda.getNumericCellValue());
+        }
+        //Para Codigo
+        celda = getCelda(4, 2);
+        entidad.setCodigo(getValorCeldaCadena(celda));
+
+        //Si es Rama
+        celda = getCelda(5, 2);
+        if (getValorCeldaCadena(celda) == "Si") {
+            entidad.setEsRama(true);
+        } else {
+            entidad.setEsRama(false);
+        }
+
+        return entidad;
     }
 
     @Override
     ICargaBO getObjetoNegocio() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return FactoriaObjetosNegocio.getInstance().getCargaBO();
     }
 
     @Override
     boolean esNuevo(Carga entidad) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return (entidad.getId() == null);
     }
 
     @Override
     String getId(Carga entidad) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return entidad.getId().toString();
     }
 
     @Override
     Integer convertirId(String cadena) throws Exception {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return convertirIdAEntero(cadena);
     }
 
     @Override
     void mostrarLista(List<Carga> lista) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        int i = 5;
+        for (Carga c : lista) {
+            setValorCelda(i, 1, c.getId());
+            setValorCelda(i, 2, c.getId());
+            setValorCelda(i, 3, c.getModificado());
+            i++;
+        }
+
     }
 
     @Override
     void mostrarEntidad(Carga entidad) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+
+        setValorCelda(3, 2, entidad.getId());
+        setValorCelda(4, 2, entidad.getCodigo());
+        if (entidad.isEsRama()) {
+            setValorCelda(5, 2, "Si");
+        } else {
+            setValorCelda(5, 2, "No");
+        }
+
     }
-    
+
 }
