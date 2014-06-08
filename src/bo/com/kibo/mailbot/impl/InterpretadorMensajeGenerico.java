@@ -62,8 +62,15 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
             mapa.put("especie", new InterpretadorMensajeEspecie());
             mapa.put("calidad", new IntepretadorMensajeCalidad());
             mapa.put("carga", new InterpretadorMensajeCarga());
+            
+            
+            
             mapa.put("censo", new InterpretadorMensajeCenso());
+            mapa.put("corta", new InterpretadorMensajeCorta());
             mapa.put("dasometrico", new InterpretarPlantillaFormulario());
+            
+            mapa.put("usuario", new InterpretadorMensajeUsuario());
+            
             caja.set(mapa);
         }
         return mapa;
@@ -310,10 +317,14 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
         try {
             if (esNuevo(entidad)) {
                 esInserccion = true;
+                preInsertar(entidad);
                 entidad = getObjetoNegocio().insertar(entidad);
+                postInsertar(entidad);
             } else {
                 esInserccion = false;
+                preActualizar(entidad);
                 entidad = getObjetoNegocio().actualizar(entidad);
+                postActualizar(entidad);
 
             }
         } catch (BusinessException e) {
@@ -341,18 +352,12 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
      * Carga las áreas a la plantilla para solicitar un formulario dasométrico
      */
     protected void cargarAreasAPlantillaFormularios() {
-        CellRangeAddressList celdaArea = new CellRangeAddressList(4, 4, 2, 2);
         List<Area> areas = FactoriaObjetosNegocio.getInstance().getAreaBO().obtenerTodos();
         String[] codigos = new String[areas.size()];
         for (int i = 0; i < areas.size(); i++) {
             codigos[i] = areas.get(i).getCodigo();
         }
-        DataValidationHelper dvHelper = hojaActual.getDataValidationHelper();
-        DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(codigos);
-        DataValidation validation = dvHelper.createValidation(dvConstraint, celdaArea);
-        validation.setSuppressDropDownArrow(true);
-        validation.setShowErrorBox(true);
-        hojaActual.addValidationData(validation);
+        agregarValidacionLista(4, 4, 2, 2, codigos, true, true);
     }
 
     protected void setValorCelda(int rowIndex, int colIndex, Integer valor) {
@@ -441,14 +446,23 @@ public abstract class InterpretadorMensajeGenerico<T, ID extends Serializable, B
 
     protected void agregarValidacionLista(int primerFila, int ultimaFila, int primerColumna, int ultimaColumna,
             String[] valores, boolean mostrarCombo, boolean mostrarError) {
-        CellRangeAddressList celdas = new CellRangeAddressList(primerFila, ultimaFila, primerColumna, ultimaColumna);
-        DataValidationHelper dvHelper = hojaActual.getDataValidationHelper();
-        DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(valores);
-        DataValidation validation = dvHelper.createValidation(dvConstraint, celdas);
-        validation.setSuppressDropDownArrow(mostrarCombo);
-        validation.setShowErrorBox(mostrarError);
-        hojaActual.addValidationData(validation);
+        if (valores != null && valores.length > 0) {
+            CellRangeAddressList celdas = new CellRangeAddressList(primerFila, ultimaFila, primerColumna, ultimaColumna);
+            DataValidationHelper dvHelper = hojaActual.getDataValidationHelper();
+            DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(valores);
+            DataValidation validation = dvHelper.createValidation(dvConstraint, celdas);
+            validation.setSuppressDropDownArrow(mostrarCombo);
+            validation.setShowErrorBox(mostrarError);
+            hojaActual.addValidationData(validation);
+        }
     }
+    
+    protected void preInsertar(T entidad){}
+    protected void postInsertar(T entidad){}
+    
+    protected void preActualizar(T entidad){}
+    protected void postActualizar(T entidad){}
+    
 
     abstract T convertirHojaEnEntidad();
 

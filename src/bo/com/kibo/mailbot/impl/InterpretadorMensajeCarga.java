@@ -32,7 +32,7 @@ public class InterpretadorMensajeCarga extends InterpretadorMensajeGenerico<Carg
 
         //Si es Rama
         celda = getCelda(5, 2);
-        if (getValorCeldaCadena(celda) == "Si") {
+        if ("si".equals(getValorCeldaCadena(celda).toLowerCase())) {
             entidad.setEsRama(true);
         } else {
             entidad.setEsRama(false);
@@ -67,7 +67,11 @@ public class InterpretadorMensajeCarga extends InterpretadorMensajeGenerico<Carg
         for (Carga c : lista) {
             setValorCelda(i, 1, c.getId());
             setValorCelda(i, 2, c.getId());
-            setValorCelda(i, 3, c.getModificado());
+            if (c.isEsRama()){
+                setValorCelda(i, 2, "Si");
+            }else{
+                setValorCelda(i, 2, "No");
+            }
             i++;
         }
 

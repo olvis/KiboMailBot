@@ -12,11 +12,7 @@ import bo.com.kibo.entidades.Area;
 import bo.com.kibo.entidades.Faja;
 import bo.com.kibo.entidades.PuntoXY;
 import java.util.List;
-import org.apache.poi.hssf.util.CellRangeAddressList;
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DataValidation;
-import org.apache.poi.ss.usermodel.DataValidationConstraint;
-import org.apache.poi.ss.usermodel.DataValidationHelper;
 
 /**
  *

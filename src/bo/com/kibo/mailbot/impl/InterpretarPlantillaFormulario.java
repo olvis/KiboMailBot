@@ -8,7 +8,6 @@ package bo.com.kibo.mailbot.impl;
 
 import bo.com.kibo.bl.exceptions.BusinessException;
 import bo.com.kibo.bl.impl.control.FactoriaObjetosNegocio;
-import bo.com.kibo.bl.intf.IAreaBO;
 import bo.com.kibo.entidades.Area;
 import bo.com.kibo.mailbot.intf.IInterpretadorFormularioDasometrico;
 import bo.com.kibo.mailbot.intf.IInterpretadorMensaje;
@@ -16,8 +15,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
 import org.apache.poi.ss.usermodel.Cell;
@@ -31,7 +28,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 public class InterpretarPlantillaFormulario implements IInterpretadorMensaje{
 
     private Integer idUsuario;
-    private List<File> archivosTemporales = new ArrayList<>();
+    private final List<File> archivosTemporales = new ArrayList<>();
     
     @Override
     public void setIdUsuario(Integer idUsuario) {
